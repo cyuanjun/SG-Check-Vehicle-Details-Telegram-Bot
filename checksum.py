@@ -1,105 +1,66 @@
+import re
+
 # Defining constants
-CHECKSUM_NUM = [14, 2, 12, 2, 11, 1]
-CHECKSUM_KEY = ["A", "Y", "U", "S", "P", "L", "J", "G", "D", "B", "Z", "X", "T", "R", "M", "K", "H", "E", "C"]
+CHECKSUM_WEIGHTS = [9, 4, 5, 4, 3, 2]
+CHECKSUM_KEY = list("AZYXUTSRPMLKJHGEDCB")
+PLATE_RE = re.compile(r"([A-Z]{1,3})(\d{1,4})([A-Z]?)")
 
 
+# function to compute checksum
+# - returns checksum letter
+def compute_checksum(prefix, numerals):
 
-# Converting string into list of integers with A = 1, B = 2...
-def alpha_conversion(alpha_list: list[str] ) -> list[int]:
-    converted_list: list[int] = []
-    for i in alpha_list:
-            converted_list.append(ord(i) - 64)
-    return converted_list
+    # PREFIX - use last 2 letters, or 1 letter
+    last2 = prefix[-2:]
 
-
-
-def plate_check(vehicle_plate: str) -> str:
-
-    # Convert vehicle plate to uppercase
-    valid_plate = False
-    vehicle_plate: str = vehicle_plate.upper()
-
-    # Check length of input (Vehicle plate length can only be between 4 and 8 characters)
-    if len(vehicle_plate) > 8 or len(vehicle_plate) < 4:
-        return "Invalid vehicle plate!\n(Vehicle plate length can only be between 4 and 8 characters)", valid_plate
-
-    # Check if vehicle plate is alphanumeric (Vehicle plate can only contain alphabets or numbers)
-    if vehicle_plate.isalnum() == False:
-        return "Invalid vehicle plate!\n(Vehicle plate can only contain alphabets or numbers)", valid_plate
-
-    # Check if first character is alphabet (Vehicle plate has to start with alphabet)
-    if vehicle_plate[0].isalpha() == False:
-        return "Invalid vehicle plate!\n(Vehicle plate has to start with alphabet)", valid_plate
-
-    # Seperating prefix and numeral from vehicle plate
-    prefix_done: bool = False
-    numeral_done: bool = False
-    vehicle_plate_prefix: list[str] = []
-    vehicle_plate_numeral: str = ""
-    vehicle_plate_checksum: str = ""
-
-    for i in vehicle_plate:
-        if prefix_done == False:
-            if i.isalpha():
-                vehicle_plate_prefix.append(i)
-            else:
-                vehicle_plate_numeral += i
-                prefix_done = True
-        elif numeral_done == False:
-            if i.isdigit():
-                vehicle_plate_numeral += i
-            else:
-                vehicle_plate_checksum = i
-                numeral_done = True
-        else:
-            if i.isnumeric():
-                return "Invalid vehicle plate!\n(Vehicle plate cannot have numbers after checksum)", valid_plate
-
-    # Check numeral length
-    if len(vehicle_plate_numeral) < 1 or len(vehicle_plate_numeral) > 4:
-        return "Invalid vehicle plate!\n(Vehicle plate has to have a numeral value of length between 1 and 4)", valid_plate
-
-    # Prefix logic by length
-    if len(vehicle_plate_prefix) > 3:
-        return "Invalid vehicle plate!\n(Vehicle plate prefix cannot be more than 3 characters)", valid_plate
-    
-    elif len(vehicle_plate_prefix) == 3:
-        prefix = [vehicle_plate_prefix[1], vehicle_plate_prefix[2]]
-
-    elif len(vehicle_plate_prefix) == 2:
-        prefix = [vehicle_plate_prefix[0], vehicle_plate_prefix[1]]
-
-    elif len(vehicle_plate_prefix) == 1:
-        prefix = ["@", vehicle_plate_prefix[0]]
-
-    # Converting string into list of integers with A = 1, B = 2...
-    prefix_converted: list[int] = alpha_conversion(prefix)
-
-    # Right adjust and convert numeric into integer list
-    r_numeric: str = vehicle_plate_numeral.rjust(4, "0")
-    vehicle_plate_numeral: list[str] = list(r_numeric)
-    numeral_converted: list[int] = [int(i) for i in vehicle_plate_numeral]
-
-    # Joining back converted prefix, numeral, and checksum
-    vehicle_plate_converted: list[int] = []
-    vehicle_plate_converted.extend(prefix_converted)
-    vehicle_plate_converted.extend(numeral_converted)
-
-    # Checksum calculation
-    checksum_sum: int = 0
-    for i in range(6):
-        checksum_sum += (CHECKSUM_NUM[i] * vehicle_plate_converted[i])
-
-    checksum_int: int = checksum_sum % 19
-    checksum_alpha: str = CHECKSUM_KEY[checksum_int]
-
-    # Check calculated checksum against given checksum value
-    if checksum_alpha != vehicle_plate_checksum:
-        e_msg = f"Invalid checksum value! Checksum value should be '{checksum_alpha}'!"
-        return e_msg, valid_plate
+    # PREFIX - convert letters to ascii to map to alphabet position
+    # - add 0 to the front of single letter prefixes 
+    if len(last2) == 1:
+        p1, p2 = 0, ord(last2) - ord('A') + 1
     else:
-        valid_plate = True
-        return "Valid vehicle plate!", valid_plate
+        p1 = ord(last2[0]) - ord('A') + 1
+        p2 = ord(last2[1]) - ord('A') + 1
+
+    # NUMERAL - add 0s to the front of non 4-digit numerals
+    digits = [int(c) for c in numerals.zfill(4)] 
+
+    # combine prefix and numeral
+    values = [p1, p2] + digits                    
+
+    # compute total by multiplying values by weight and summing them
+    total = sum(w * v for w, v in zip(CHECKSUM_WEIGHTS, values))
+
+    # return checksum letter
+    return CHECKSUM_KEY[total % 19]
+
+
+
+# function to check if plate is valid
+# - returns msg + boolean (True if valid/ False if invalid)
+def plate_check(plate):
+
+    # strip input of trailing spaces and uppercase it
+    plate = plate.strip().upper()
+
+    # check plate length
+    if not (1 < len(plate) <= 8):
+        return "Invalid vehicle plate!\n(Input length must be between 2 and 8 characters)", False
+
+    m = PLATE_RE.fullmatch(plate)
+    if not m:
+        return "Invalid vehicle plate!\n(Format must be PREFIX + NUMERAL + CHECKSUM)", False
+
+    prefix, numerals, given = m.groups()
+    expected = compute_checksum(prefix, numerals)
+
+    if given == "":
+        return f"Missing checksum! Checksum expected: '{expected}'!", False
+
+    if given != expected:
+        return f"Invalid checksum! Checksum expected: '{expected}'!", False
+
+
+    return "Valid vehicle plate!", True
 
 
 
